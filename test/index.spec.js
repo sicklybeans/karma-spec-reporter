@@ -66,25 +66,41 @@ var baseReporterDecorator = function (context) {
   context.write = sinon.spy();
 };
 
+function createSpecReporter(config) {
+  config = config || {};
+  var processMock = {
+    platform: function () {
+      return 'win32';
+    }
+  };
+  reporterRewire.__set__({
+    'reporter:spec': SpecReporter,
+    process: {
+      platform: 'win32'
+    }
+  });
+  return new reporterRewire['reporter:spec'][1](baseReporterDecorator, formatError, config);
+}
+
+function createConfigWithPrefixes(prefixes) {
+  return {
+    specReporter: {
+      prefixes: prefixes
+    }
+  }
+}
+/*
+ * NOTE: There might be some confusion between the mocking of the system and
+ * checking for the raw os like this function does. This is merely an
+ * exposition of the need for tests around multiple platforms.
+*/
+function isWindows() {
+  return os.platform() === 'win32';
+}
+
 describe('SpecReporter', function () {
   describe('when initializing', function () {
     describe('and on a windows machine', function () {
-      function createSpecReporter(config) {
-        config = config || {};
-        var processMock = {
-          platform: function () {
-            return 'win32';
-          }
-        };
-        reporterRewire.__set__({
-          'reporter:spec': SpecReporter,
-          process: {
-            platform: 'win32'
-          }
-        });
-        return new reporterRewire['reporter:spec'][1](baseReporterDecorator, formatError, config);
-      };
-
       it('SpecReporter should have icons defined appropriately', function () {
         var newSpecReporter = createSpecReporter();
         newSpecReporter.prefixes.success.should.equal(windowsIcons.success);
@@ -92,13 +108,6 @@ describe('SpecReporter', function () {
         newSpecReporter.prefixes.skipped.should.equal(windowsIcons.skipped);
       });
 
-      function createConfigWithPrefixes(prefixes) {
-        return {
-          specReporter: {
-            prefixes: prefixes
-          }
-        }
-      }
       it('SpecReporter should allow overriding success icon only', function () {
         var expected = 'PASS';
         var config = createConfigWithPrefixes({ success: expected });
@@ -176,15 +185,28 @@ describe('SpecReporter', function () {
       });
 
       it('should set the BaseReporter function\'s colors', function () {
-        newSpecReporter.SPEC_FAILURE.should.equal(ansiColors.red + '%s %s FAILED' + ansiColors.reset + '\n');
-        newSpecReporter.SPEC_SLOW.should.equal(ansiColors.yellow + '%s SLOW %s: %s' + ansiColors.reset + '\n');
-        newSpecReporter.ERROR.should.equal(ansiColors.red + '%s ERROR' + ansiColors.reset + '\n');
-        newSpecReporter.FINISHED_ERROR.should.equal(ansiColors.red + ' ERROR' + ansiColors.reset);
-        newSpecReporter.FINISHED_SUCCESS.should.equal(ansiColors.green + ' SUCCESS' + ansiColors.reset);
-        newSpecReporter.FINISHED_DISCONNECTED.should.equal(ansiColors.red + ' DISCONNECTED' + ansiColors.reset);
-        newSpecReporter.X_FAILED.should.equal(ansiColors.red + ' (%d FAILED)' + ansiColors.reset);
-        newSpecReporter.TOTAL_SUCCESS.should.equal(ansiColors.green + 'TOTAL: %d SUCCESS' + ansiColors.reset + '\n');
-        newSpecReporter.TOTAL_FAILED.should.equal(ansiColors.red + 'TOTAL: %d FAILED, %d SUCCESS' + ansiColors.reset + '\n');
+        //NOTE: this is temporary as the colors module was updated
+        if (isWindows()) {
+            newSpecReporter.SPEC_FAILURE.should.equal('%s %s FAILED\n');
+            newSpecReporter.SPEC_SLOW.should.equal('%s SLOW %s: %s\n');
+            newSpecReporter.ERROR.should.equal('%s ERROR\n');
+            newSpecReporter.FINISHED_ERROR.should.equal(' ERROR');
+            newSpecReporter.FINISHED_SUCCESS.should.equal(' SUCCESS');
+            newSpecReporter.FINISHED_DISCONNECTED.should.equal(' DISCONNECTED');
+            newSpecReporter.X_FAILED.should.equal(' (%d FAILED)');
+            newSpecReporter.TOTAL_SUCCESS.should.equal('TOTAL: %d SUCCESS\n');
+            newSpecReporter.TOTAL_FAILED.should.equal('TOTAL: %d FAILED, %d SUCCESS\n');
+        } else {
+            newSpecReporter.SPEC_FAILURE.should.equal(ansiColors.red + '%s %s FAILED' + ansiColors.reset + '\n');
+            newSpecReporter.SPEC_SLOW.should.equal(ansiColors.yellow + '%s SLOW %s: %s' + ansiColors.reset + '\n');
+            newSpecReporter.ERROR.should.equal(ansiColors.red + '%s ERROR' + ansiColors.reset + '\n');
+            newSpecReporter.FINISHED_ERROR.should.equal(ansiColors.red + ' ERROR' + ansiColors.reset);
+            newSpecReporter.FINISHED_SUCCESS.should.equal(ansiColors.green + ' SUCCESS' + ansiColors.reset);
+            newSpecReporter.FINISHED_DISCONNECTED.should.equal(ansiColors.red + ' DISCONNECTED' + ansiColors.reset);
+            newSpecReporter.X_FAILED.should.equal(ansiColors.red + ' (%d FAILED)' + ansiColors.reset);
+            newSpecReporter.TOTAL_SUCCESS.should.equal(ansiColors.green + 'TOTAL: %d SUCCESS' + ansiColors.reset + '\n');
+            newSpecReporter.TOTAL_FAILED.should.equal(ansiColors.red + 'TOTAL: %d FAILED, %d SUCCESS' + ansiColors.reset + '\n');
+        }
       });
     });
 
@@ -412,7 +434,7 @@ describe('SpecReporter', function () {
         };
         return result;
       }
-      
+
       it('should write a single failure out', function () {
         var errors = [
           {
@@ -423,11 +445,20 @@ describe('SpecReporter', function () {
             ]
           }
         ];
-        var expected = ['\n\n',
-          '\u001b[31m1) should do stuff\n\u001b[39m',
-          '\u001b[31m     A B\n\u001b[39m',
-          '     \u001b[90mThe Error!\u001b[39m',
-          '\n'];
+        //NOTE: this is temporary as the colors module was updated
+        if (isWindows()) {
+          var expected = ['\n\n',
+            '1) should do stuff\n',
+            '     A B\n',
+            '     The Error!',
+            '\n'];
+        } else {
+          var expected = ['\n\n',
+            '\u001b[31m1) should do stuff\n\u001b[39m',
+            '\u001b[31m     A B\n\u001b[39m',
+            '     \u001b[90mThe Error!\u001b[39m',
+            '\n'];
+        }
         var specReporter = createSpecReporter();
         specReporter.logFinalErrors(errors);
         writtenMessages.should.eql(expected);
@@ -443,11 +474,21 @@ describe('SpecReporter', function () {
             ]
           }
         ];
-        var expected = ['\n\n',
-          '\u001b[31m1) should do stuff\n\u001b[39m',
-          '\u001b[31m     A B\n\u001b[39m',
-          '     \u001b[90mThe Error!\u001b[39m',
-          '\n'];
+        //NOTE: this is temporary as the colors module was updated
+        if (isWindows()) {
+          var expected = ['\n\n',
+            '1) should do stuff\n',
+            '     A B\n',
+            '     The Error!',
+            '\n'];
+
+        } else {
+          var expected = ['\n\n',
+            '\u001b[31m1) should do stuff\n\u001b[39m',
+            '\u001b[31m     A B\n\u001b[39m',
+            '     \u001b[90mThe Error!\u001b[39m',
+            '\n'];
+        }
         var specReporter = createSpecReporter({
           specReporter: {
             maxLogLines: 1
@@ -474,15 +515,28 @@ describe('SpecReporter', function () {
             ]
           }
         ];
-        var expected = ['\n\n',
-          '\u001b[31m1) should do stuff\n\u001b[39m',
-          '\u001b[31m     A B\n\u001b[39m',
-          '     \u001b[90mThe Error!\u001b[39m',
-          '\n',         
-          '\u001b[31m2) should do more stuff\n\u001b[39m',
-          '\u001b[31m     C D\n\u001b[39m',
-          '     \u001b[90mAnother error!\u001b[39m',
-          '\n'];
+        //NOTE: this is temporary as the colors module was updated
+        if (isWindows()) {
+          var expected = ['\n\n',
+            '1) should do stuff\n',
+            '     A B\n',
+            '     The Error!',
+            '\n',
+            '2) should do more stuff\n',
+            '     C D\n',
+            '     Another error!',
+            '\n'];
+        } else {
+          var expected = ['\n\n',
+            '\u001b[31m1) should do stuff\n\u001b[39m',
+            '\u001b[31m     A B\n\u001b[39m',
+            '     \u001b[90mThe Error!\u001b[39m',
+            '\n',
+            '\u001b[31m2) should do more stuff\n\u001b[39m',
+            '\u001b[31m     C D\n\u001b[39m',
+            '     \u001b[90mAnother error!\u001b[39m',
+            '\n'];
+        }
         var specReporter = createSpecReporter();
         specReporter.logFinalErrors(errors);
         writtenMessages.should.eql(expected);
